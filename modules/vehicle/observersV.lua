@@ -46,7 +46,8 @@ function observersV.init(radioMod)
         local sorted = {}
 
         for _, v in pairs(stations) do -- Store in temp table for sorting by fm number
-            local fm = string.gsub(GetLocalizedText(v.record:DisplayName()), ",", ".")
+            local displayName = GetLocalizedText(v.record:DisplayName())
+            local fm = string.gsub(displayName, ",", ".")
 
             local split = utils.split(fm, " ")
             if tonumber(split[1]) then
@@ -55,17 +56,47 @@ function observersV.init(radioMod)
                 fm = tonumber(split[#split])
             end
 
-            if GetLocalizedText(v.record:DisplayName()) == "Enable Aux Radio" then fm = 0 end
+            -- If fm is still nil (station name has no number), default to 0
+            -- so the sort doesn't crash with "attempt to compare nil with number".
+            if fm == nil then
+                fm = 0
+            end
+
+            if displayName == "Enable Aux Radio" then fm = 0 end
 
             sorted[#sorted + 1] = { data = v, fm = fm }
         end
 
+        local customCount = 0
         for _, radio in pairs(observersV.radioMod.radioManager.radios) do -- Add custom radios
-            sorted[#sorted + 1] = { data = RadioListItemData.new({ record = TweakDBInterface.GetRadioStationRecord(radio.tdbName) }), fm = tonumber(radio.fm)}
+            -- Use tonumber with fallback to 0 so a non-numeric fm doesn't
+            -- crash the table.sort below.
+            local fmVal = tonumber(radio.fm)
+            if fmVal == nil then
+                print(("[RadioExt] Warning: Station \"%s\" has non-numeric fm (%s), using 0 for sorting."):format(
+                    tostring(radio.name), tostring(radio.fm)))
+                fmVal = 0
+            end
+
+            local record = TweakDBInterface.GetRadioStationRecord(radio.tdbName)
+            if record == nil then
+                print(("[RadioExt] Warning: TweakDB record \"%s\" not found for station \"%s\". Skipping."):format(
+                    tostring(radio.tdbName), tostring(radio.name)))
+            else
+                sorted[#sorted + 1] = { data = RadioListItemData.new({ record = record }), fm = fmVal }
+                customCount = customCount + 1
+            end
         end
 
+        radioMod.logger.log(("GetRadioStations: %d vanilla + %d custom stations"):format(#sorted - customCount, customCount))
+
         table.sort(sorted, function (a, b) -- Sort
-            return a.fm < b.fm
+            -- Nil-safe comparison: treat nil fm as 0 (infinity would push
+            -- broken stations to the end, but 0 keeps them at the top
+            -- where they're visible for debugging).
+            local af = a.fm or 0
+            local bf = b.fm or 0
+            return af < bf
         end)
 
         local stations = {}
