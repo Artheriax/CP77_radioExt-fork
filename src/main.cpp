@@ -24,16 +24,21 @@ constexpr int32_t MaxLoadAttempts = 3;
 // Forward declarations
 // ---------------------------------------------------------------------------
 
-// Forward-declared so that RadioExtClass (below) can reference it as a
-// template argument before the full definition appears later in this file.
+// Forward-declared so that helpers below can reference it.
 struct RadioExt;
 
 // ---------------------------------------------------------------------------
 // File-scope state (anonymous namespace = internal linkage)
 // ---------------------------------------------------------------------------
 
-const RED4ext::Sdk* Sdk = nullptr;
-RED4ext::PluginHandle PluginHandle = nullptr;
+// Native class setup — must be fully defined before TTypedClass<RadioExt> below
+struct RadioExt : RED4ext::IScriptable
+{
+    RED4ext::CClass* GetNativeType();
+};
+
+const RED4ext::v1::Sdk* Sdk = nullptr;
+RED4ext::v1::PluginHandle PluginHandle = nullptr;
 std::filesystem::path GameExePath;
 FMOD::System* AudioSystem = nullptr;
 
@@ -108,7 +113,7 @@ FMOD_VECTOR ToFmodVector(const RED4ext::Vector4& aVec, RED4ext::CClass* aVector4
 std::filesystem::path GetExePath()
 {
     wchar_t exePathBuffer[MAX_PATH]{0};
-    GetModuleFileName(GetModuleHandle(nullptr), exePathBuffer, std::size(exePathBuffer));
+    GetModuleFileNameW(GetModuleHandle(nullptr), exePathBuffer, std::size(exePathBuffer));
     return std::filesystem::path(exePathBuffer);
 }
 
@@ -137,13 +142,8 @@ void SetFadeIn(FMOD::Channel* aChannel, float aDuration)
 }
 
 // ---------------------------------------------------------------------------
-// Native class setup
+// Native class GetNativeType implementation
 // ---------------------------------------------------------------------------
-
-struct RadioExt : RED4ext::IScriptable
-{
-    RED4ext::CClass* GetNativeType();
-};
 
 RED4ext::CClass* RadioExt::GetNativeType()
 {
@@ -715,12 +715,12 @@ RED4EXT_C_EXPORT void RED4EXT_CALL PostRegisterTypes()
     RegisterAudioFunctions(rtti);
 }
 
-RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::EMainReason aReason,
-                                        const RED4ext::Sdk* aSdk)
+RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4ext::v1::EMainReason aReason,
+                                        const RED4ext::v1::Sdk* aSdk)
 {
     switch (aReason)
     {
-    case RED4ext::EMainReason::Load:
+    case RED4ext::v1::EMainReason::Load:
     {
         Sdk = aSdk;
         PluginHandle = aHandle;
@@ -739,7 +739,7 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::
             LoadData[i]->play = false;
         }
 
-        RED4ext::GameState runningState;
+        RED4ext::v1::GameState runningState;
         runningState.OnEnter = &OnRunningEnter;
         runningState.OnUpdate = &OnRunningUpdate;
         runningState.OnExit = &OnRunningExit;
@@ -750,7 +750,7 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::
 
         break;
     }
-    case RED4ext::EMainReason::Unload:
+    case RED4ext::v1::EMainReason::Unload:
     {
         AudioSystem->close();
         AudioSystem->release();
@@ -761,16 +761,16 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::
     return true;
 }
 
-RED4EXT_C_EXPORT void RED4EXT_CALL Query(RED4ext::PluginInfo* aInfo)
+RED4EXT_C_EXPORT void RED4EXT_CALL Query(RED4ext::v1::PluginInfo* aInfo)
 {
     aInfo->name = L"RadioExt";
     aInfo->author = L"keanuWheeze";
-    aInfo->version = RED4EXT_SEMVER(2, 3, 0);
-    aInfo->runtime = RED4EXT_RUNTIME_INDEPENDENT;
-    aInfo->sdk = RED4EXT_SDK_LATEST;
+    aInfo->version = RED4EXT_V1_SEMVER(2, 3, 0);
+    aInfo->runtime = RED4EXT_V1_RUNTIME_VERSION_INDEPENDENT;
+    aInfo->sdk = RED4EXT_V1_SDK_VERSION_CURRENT;
 }
 
 RED4EXT_C_EXPORT uint32_t RED4EXT_CALL Supports()
 {
-    return RED4EXT_API_VERSION_LATEST;
+    return RED4EXT_API_VERSION_1;
 }
