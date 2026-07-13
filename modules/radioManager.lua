@@ -193,9 +193,19 @@ function radioManager:loadRadios() -- Loads radios
                 if loadOk then
                     self.radios[#self.radios + 1] = r
                     local stationType = metadata.streamInfo.isStream and "stream" or "file"
-                    local songCount = #songs
+                    -- Use #r.songs (integer-keyed array built by radioStation:load),
+                    -- NOT #songs (which is string-keyed and always returns 0 for the
+                    -- length operator in Lua).
+                    local songCount = #r.songs
                     print(("[RadioExt] Loaded station \"%s\" (FM %s, %d song(s), type: %s, index: %d)"):format(
                         tostring(metadata.displayName), tostring(metadata.fm), songCount, stationType, r.index))
+
+                    -- Helpful hint: if isStream is false but a streamURL is present,
+                    -- the user almost certainly forgot to flip isStream to true.
+                    if not metadata.streamInfo.isStream and type(metadata.streamInfo.streamURL) == "string" and metadata.streamInfo.streamURL ~= "" then
+                        print(("[RadioExt] Hint: Station \"%s\" has isStream=false but streamURL is set to \"%s\". If this station is meant to be a web stream, set isStream to true in metadata.json."):format(
+                            tostring(metadata.displayName), metadata.streamInfo.streamURL))
+                    end
                 else
                     print(("[RadioExt] Error: Failed to load station \"%s\" (folder: \"%s\"): %s"):format(
                         tostring(metadata.displayName), tostring(path), tostring(loadErr)))
