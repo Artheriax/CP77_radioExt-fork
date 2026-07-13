@@ -5,5 +5,4 @@
 *.mp3
 *.json
 \build
-CMakeLists.txt
 *.zip
