@@ -82,17 +82,19 @@ function observersV.init(radioMod)
     Override("QuickSlotsManager", "SendRadioEvent", function (this, toggle, setStation, station, wrapped)
         radioMod.logger.log("QuickSlotsManager::SendRadioEvent")
         if station > 13 then
-            if GetMountedVehicle(GetPlayer()) then
+            local mountedVehicle = GetMountedVehicle(GetPlayer())
+            if mountedVehicle then
                 this.Player:QueueEventForEntityID(this.PlayerVehicleID, VehicleRadioEvent.new({ toggle = false, setStation = false, station = -1 })) -- Goes to the vehicle radio if there is any, disabling it
             end
-            if not GetMountedVehicle(GetPlayer()) or GetPlayer():GetPocketRadio().settings:GetSyncToCarRadio() then
+            if not mountedVehicle or GetPlayer():GetPocketRadio().settings:GetSyncToCarRadio() then
                 this.Player:QueueEvent(VehicleRadioEvent.new({ toggle = toggle, setStation = setStation, station = station })) -- Goes to PocketRadio::HandleVehicleRadioEvent
             end
 
             Cron.After(0.1, function ()
-                if GetMountedVehicle(GetPlayer()) then
-                    GetMountedVehicle(GetPlayer()):GetVehicleComponent().radioState = true
-                    GetMountedVehicle(GetPlayer()):GetBlackboard():SetBool(GetAllBlackboardDefs().Vehicle.VehRadioState, true)
+                local veh = GetMountedVehicle(GetPlayer())
+                if veh then
+                    veh:GetVehicleComponent().radioState = true
+                    veh:GetBlackboard():SetBool(GetAllBlackboardDefs().Vehicle.VehRadioState, true)
                 end
             end)
         else
@@ -158,7 +160,14 @@ function observersV.init(radioMod)
             this:GetVehicle():ToggleRadioReceiver(false)
             return
         else
-            local name = GetMountedVehicle(GetPlayer()):GetBlackboard():GetName(GetAllBlackboardDefs().Vehicle.VehRadioStationName) -- Get current radio name
+            local mountedVehicle = GetMountedVehicle(GetPlayer())
+            if not mountedVehicle then
+                -- No active custom radio and no mounted vehicle: nothing for us to do,
+                -- fall through to the vanilla handler so the engine can still toggle
+                -- the pocket radio.
+                return wrapped(evt)
+            end
+            local name = mountedVehicle:GetBlackboard():GetName(GetAllBlackboardDefs().Vehicle.VehRadioStationName) -- Get current radio name
 
             if GetLocalizedTextByKey(name) ~= "" then
                 name = GetLocalizedTextByKey(name)
@@ -182,7 +191,12 @@ function observersV.init(radioMod)
     Override("PocketRadio", "HandleVehicleRadioStationChanged", function (this, evt, wrapped)
         if this.settings:GetSyncToCarRadio() then
             local activeVRadio = radioMod.radioManager.managerV:getActiveStationData()
-            evt.radioIndex = activeVRadio.index
+            -- Only override the index when a custom station is actually active.
+            -- Previously this crashed with a nil-index access whenever the player
+            -- was using a vanilla station.
+            if activeVRadio then
+                evt.radioIndex = activeVRadio.index
+            end
         end
         radioMod.logger.log("PocketRadio::HandleVehicleRadioStationChanged" .. tostring(evt.radioIndex))
         wrapped(evt)
@@ -303,14 +317,22 @@ function observersV.init(radioMod)
                 radioMod.radioManager.managerV:switchToRadio(radio)
             end)
             Cron.After(0.5, function ()
-                GetMountedVehicle(GetPlayer()):GetBlackboard():SetName(GetAllBlackboardDefs().Vehicle.VehRadioStationName, cRadio.station)
-                GetMountedVehicle(GetPlayer()):GetBlackboard():SetBool(GetAllBlackboardDefs().Vehicle.VehRadioState, true)
+                local veh = GetMountedVehicle(GetPlayer())
+                if veh then
+                    veh:GetBlackboard():SetName(GetAllBlackboardDefs().Vehicle.VehRadioStationName, cRadio.station)
+                    veh:GetBlackboard():SetBool(GetAllBlackboardDefs().Vehicle.VehRadioState, true)
+                end
             end)
             radioMod.radioManager:updateVRadioVolume()
         else
             Cron.After(0.5, function ()
-                if GetPlayer():GetPocketRadio().isOn then
-                    GetMountedVehicle(GetPlayer()):GetBlackboard():SetName(GetAllBlackboardDefs().Vehicle.VehRadioStationName, GetPlayer():GetPocketRadio():GetStationName())
+                local player = GetPlayer()
+                if not player then return end
+                if player:GetPocketRadio().isOn then
+                    local veh = GetMountedVehicle(player)
+                    if veh then
+                        veh:GetBlackboard():SetName(GetAllBlackboardDefs().Vehicle.VehRadioStationName, player:GetPocketRadio():GetStationName())
+                    end
                 end
             end)
         end

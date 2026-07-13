@@ -2,10 +2,10 @@ local Cron = require("modules/utils/Cron")
 local utils = require("modules/utils/utils")
 local audio = require("modules/utils/audioEngine")
 
-radio = {}
+local radio = {}
 
 function radio:new(radioMod)
-	local o = {}
+        local o = {}
 
     o.rm = radioMod
 
@@ -28,8 +28,8 @@ function radio:new(radioMod)
 
     o.channels = {}
 
-	self.__index = self
-   	return setmetatable(o, self)
+        self.__index = self
+        return setmetatable(o, self)
 end
 
 function radio:getSongByPath(tab, path)
@@ -104,7 +104,13 @@ function radio:load(metadata, lengthData, path, index) -- metadata is the data p
         self.currentSong = { path = self.name, length = 0 } -- Used for the "playing now" HUD element
     end
 
-    for i = -1, RadioExt.GetNumChannels() do -- -1 is vehicle radio, 1 - CHANNELS is physical channels
+    -- Initialize every logical channel slot to "not playing".
+    -- -1 is the vehicle-radio sentinel (mapped to slot 0 on the C++ side);
+    -- 1..N are the physical-radio channels.
+    -- We deliberately skip index 0 on the Lua side because it is the internal
+    -- slot the C++ side reserves for the vehicle radio.
+    self.channels[-1] = false
+    for i = 1, RadioExt.GetNumChannels() do
         self.channels[i] = false
     end
 end
@@ -112,7 +118,14 @@ end
 function radio:startRadioSimulation()
     self:generateShuffelBag()
     self.currentSong = self.shuffelBag[1]
-    self.tick = math.random(self.currentSong.length - 15)
+    -- math.random(n) requires n >= 1. Short jingles or very short clips
+    -- (length <= 15s, including the 15s safety margin) previously crashed
+    -- the simulation on startup with "bad argument #1 to 'random'".
+    local maxStart = self.currentSong.length - 15
+    if maxStart < 1 then
+        maxStart = 1
+    end
+    self.tick = math.random(maxStart) - 1
     table.remove(self.shuffelBag, 1)
 
     -- TODO: Make this less stupid and more accurate, currently up to a second off, causing error on cpp side due to channel being invalid / ended

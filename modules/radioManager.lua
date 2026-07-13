@@ -17,7 +17,7 @@ local extensions = {
 }
 
 function radioManager:new(radioMod)
-	local o = {}
+        local o = {}
 
     o.rm = radioMod
     o.radios = {}
@@ -25,8 +25,8 @@ function radioManager:new(radioMod)
     o.managerV = nil
     o.managerP = nil
 
-	self.__index = self
-   	return setmetatable(o, self)
+        self.__index = self
+        return setmetatable(o, self)
 end
 
 local function isValidExtension(extension)
@@ -98,18 +98,18 @@ function radioManager:loadRadios() -- Loads radios
         else
             local songs = self:getSongLengths(path)
             local metadata
-            local success = pcall(function ()
+            local success, err = pcall(function ()
                 metadata = config.loadFile("radios/" .. path .. "/metadata.json")
             end)
 
-            if success then
+            if success and metadata ~= nil then
                 self:backwardsCompatibility(metadata, path)
 
                 local r = require("modules/radioStation"):new(self.rm)
                 r:load(metadata, songs, path, index)
                 self.radios[#self.radios + 1] = r
             else
-                print("[RadioExt] Error: Failed to load the metadata.json file for \"" .. path .. "\". Make sure the file is valid.")
+                print("[RadioExt] Error: Failed to load the metadata.json file for \"" .. path .. "\". Make sure the file is valid." .. (err and (" (" .. tostring(err) .. ")") or ""))
             end
         end
     end
@@ -141,17 +141,20 @@ function radioManager:disableCustomRadios() -- Disables all custom radios, vehic
     for _, radio in pairs(self.radios) do
         radio:deactivate(-1)
     end
-    self.managerP:uninit()
+    -- managerP may be nil if init() threw before its construction.
+    if self.managerP and self.managerP.uninit then
+        self.managerP:uninit()
+    end
 end
 
 function radioManager:update()
-    self.managerV:update()
-    self.managerP:update()
+    if self.managerV then self.managerV:update() end
+    if self.managerP then self.managerP:update() end
 end
 
 function radioManager:handleMenu()
-    self.managerV:handleMenu()
-    self.managerP:handleMenu()
+    if self.managerV then self.managerV:handleMenu() end
+    if self.managerP then self.managerP:handleMenu() end
 end
 
 function radioManager:updateVRadioVolume()
